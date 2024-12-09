@@ -1,0 +1,78 @@
+Assignment 5
+Correct implementation1
+
+"#include "fat.h"
+#include <vector>
+#include <map>
+#include <algorithm>
+#include <cstdio>
+#include <iostream>
+
+int checkConsistency(int blockSize, std::vector<DEntry>& files, std::vector<int>& fat) {
+    std::vector<bool> visited(fat.size(), false);
+    std::map<int, std::vector<int>> blockToFileIndexes; // Maps a block to file indexes that reference it
+
+    int freeBlocks = 0; // Count of free blocks
+
+    // Reset flags for each file
+    for (auto& file : files) {
+        file.tooManyBlocks = false;
+        file.tooFewBlocks = false;
+        file.hasCycle = false;
+        file.sharesBlocks = false;
+    }
+
+    // Iterate through each file to check for block consistency and detect cycles or shared blocks
+    for (int i = 0; i < files.size(); ++i) {
+        int currentBlock = files[i].ind;
+        std::vector<int> blocksForThisFile; // Store blocks as we visit them for this file
+
+        std::map<int, bool> visitedInThisFile;
+        while (currentBlock != -1) {
+            // Cycle detection within the same file
+            if (visitedInThisFile[currentBlock]) {
+                files[i].hasCycle = true;
+                break; // Stop if we've found a cycle
+            }
+
+            visitedInThisFile[currentBlock] = true;
+
+            // Mark block as visited globally
+            visited[currentBlock] = true;
+            blocksForThisFile.push_back(currentBlock);
+
+            // Move to the next block in the chain
+            currentBlock = fat[currentBlock];
+        }
+
+        // Check if other files share the same blocks
+        for (int block : blocksForThisFile) {
+            blockToFileIndexes[block].push_back(i);
+        }
+
+        // Calculate required blocks based on file size and block size
+        int requiredBlocks = (files[i].size + blockSize - 1) / blockSize;
+        if (blocksForThisFile.size() < requiredBlocks) {
+            files[i].tooFewBlocks = true;
+        } else if (blocksForThisFile.size() > requiredBlocks) {
+            files[i].tooManyBlocks = true;
+        }
+    }
+
+    // Identify shared blocks after processing all files
+    for (auto& entry : blockToFileIndexes) {
+        if (entry.second.size() > 1) {
+            // If more than one file references this block, it's shared
+            for (int fileIndex : entry.second) {
+                files[fileIndex].sharesBlocks = true;
+            }
+        }
+    }
+
+    // Count free blocks
+    for (int i = 0; i < fat.size(); ++i) {
+        if (!visited[i]) ++freeBlocks;
+    }
+
+    return freeBlocks;
+}"
